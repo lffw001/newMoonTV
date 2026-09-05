@@ -7,14 +7,18 @@ import './globals.css';
 import 'sweetalert2/dist/sweetalert2.min.css';
 
 import { getConfig } from '@/lib/config';
+import { getDefaultPlaybackSaveInterval } from '@/lib/playback-settings';
 
+import ConditionalNav from '../components/ConditionalNav';
+import GlobalDownloadManager from '../components/GlobalDownloadManager';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
 import { NavigationLoadingIndicator } from '../components/NavigationLoadingIndicator';
 import { NavigationLoadingProvider } from '../components/NavigationLoadingProvider';
+import ServiceWorkerRegistration from '../components/ServiceWorkerRegistration';
 import { SiteProvider } from '../components/SiteProvider';
 import SubscriptionAutoUpdate from '../components/SubscriptionAutoUpdate';
-import UserOnlineUpdate from '../components/UserOnlineUpdate';
 import { ThemeProvider } from '../components/ThemeProvider';
+import UserOnlineUpdate from '../components/UserOnlineUpdate';
 
 export const runtime = 'edge';
 
@@ -61,6 +65,9 @@ export default async function RootLayout({
   let danmakuApiBaseUrl =
     process.env.NEXT_PUBLIC_DANMU_API_BASE_URL ||
     '';
+  let playbackSaveInterval =
+    Number(process.env.NEXT_PUBLIC_PLAYBACK_SAVE_INTERVAL) ||
+    getDefaultPlaybackSaveInterval(storageType);
   let autoUpdateEnabled = false;
   if (storageType !== 'localstorage') {
     const config = await getConfig();
@@ -74,6 +81,12 @@ export default async function RootLayout({
     disableYellowFilter = config.SiteConfig.DisableYellowFilter;
     danmakuApiBaseUrl =
       config.SiteConfig.DanmakuApiBaseUrl || danmakuApiBaseUrl;
+    playbackSaveInterval =
+      typeof config.SiteConfig.PlaybackSaveInterval === 'number' &&
+      config.SiteConfig.PlaybackSaveInterval > 0
+        ? config.SiteConfig.PlaybackSaveInterval
+        : Number(process.env.NEXT_PUBLIC_PLAYBACK_SAVE_INTERVAL) ||
+          getDefaultPlaybackSaveInterval(storageType);
     autoUpdateEnabled = config.SubscriptionConfig?.autoUpdate === true;
   }
 
@@ -87,6 +100,7 @@ export default async function RootLayout({
     DOUBAN_IMAGE_PROXY: doubanImageProxy,
     DISABLE_YELLOW_FILTER: disableYellowFilter,
     DANMU_API_BASE_URL: danmakuApiBaseUrl,
+    PLAYBACK_SAVE_INTERVAL: playbackSaveInterval,
   };
 
   return (
@@ -114,11 +128,30 @@ export default async function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
+          <ServiceWorkerRegistration />
           <NavigationLoadingProvider>
             <SiteProvider siteName={siteName} announcement={announcement}>
               <NavigationLoadingIndicator />
               <UserOnlineUpdate />
-              {children}
+              
+              {/* 条件导航栏 - 根据路径自动判断是否显示 */}
+              <ConditionalNav />
+              
+              {/* 全局下载管理器 - 只渲染一次，被所有导航栏共享 */}
+              <GlobalDownloadManager />
+              
+              {/* 页面内容 */}
+              <div className='relative w-full'>
+                <main
+                  className='flex-1 mb-14 md:mb-0'
+                  style={{
+                    paddingBottom: 'calc(3.5rem + env(safe-area-inset-bottom))',
+                  }}
+                >
+                  {children}
+                </main>
+              </div>
+              
               <GlobalErrorIndicator />
               {autoUpdateEnabled && <SubscriptionAutoUpdate />}
             </SiteProvider>
